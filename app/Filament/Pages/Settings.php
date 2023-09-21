@@ -3,15 +3,19 @@
 namespace App\Filament\Pages;
 
 use App\Forms\Components\CustomPlaceholder;
+use App\Models\User;
+use Exception;
 use Filament\Forms\Components\Group;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Components\ViewField;
+use Filament\Forms\Components\View;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\File;
 
 class Settings extends Page
 {
@@ -21,9 +25,17 @@ class Settings extends Page
 
     public ?array $data = [];
 
+    public User $user;
+
     public function mount(): void
     {
-        $this->form->fill();
+        $this->user = auth()->user();
+        $this->form->fill([
+            'name' => $this->user->name,
+            'email' => $this->user->email,
+            'whatsapp' => $this->user->whatsapp,
+            'settings' => $this->user->settings,
+        ]);
     }
 
     public function form(Form $form): Form
@@ -38,11 +50,13 @@ class Settings extends Page
                             ->label('Perfil do '.auth()->user()->name)
                             ->content('Confira os seus dados e altere caso necessário.'),
 
-                        ViewField::make('hr')
+                        View::make('hr')
                             ->view('forms.components.hr'),
 
                         Group::make([
                             Placeholder::make('name')
+                                ->label('Nome')
+                                ->required()
                                 ->columnSpan(1),
                             TextInput::make('name')
                                 ->required()
@@ -52,8 +66,11 @@ class Settings extends Page
 
                         Group::make([
                             Placeholder::make('email')
+                                ->label('Email')
+                                ->required()
                                 ->columnSpan(1),
                             TextInput::make('email')
+                                ->email()
                                 ->required()
                                 ->hiddenLabel()
                                 ->columnSpan(5),
@@ -61,39 +78,50 @@ class Settings extends Page
 
                         Group::make([
                             Placeholder::make('whatsapp')
+                                ->label('WhatsApp')
+                                ->required()
                                 ->columnSpan(1),
                             TextInput::make('whatsapp')
+                                ->mask('(99) 99999-9999')
                                 ->required()
                                 ->hiddenLabel()
                                 ->columnSpan(5),
                         ])->columns(6),
 
-                        ViewField::make('hr')
+                        View::make('hr')
                             ->view('forms.components.hr'),
 
                         CustomPlaceholder::make('title')
                             ->label('Localização')
-                            ->content('Escolha seu idioma e formato de tela'),
+                            ->content('Escolha seu idioma e formato de data.'),
 
                         Group::make([
                             Placeholder::make('Idioma')
+                                ->label('Idioma')
+                                ->required()
                                 ->columnSpan(1),
-                            Select::make('language')
-                                ->options([])
+                            Select::make('settings.language')
+                                ->required()
+                                ->options(File::json(public_path('data/languages.json')))
+                                ->searchable()
                                 ->hiddenLabel()
                                 ->columnSpan(5),
                         ])->columns(6),
 
                         Group::make([
                             Placeholder::make('Formato da data')
+                                ->label('Formato da data')
+                                ->required()
                                 ->columnSpan(1),
-                            Select::make('date_format')
-                                ->options([])
+                            Select::make('settings.date_format')
+                                ->required()
+                                ->options(File::json(public_path('data/date-format.json')))
+                                ->searchable()
                                 ->hiddenLabel()
                                 ->columnSpan(5),
                         ])->columns(6),
 
-                        ViewField::make('hr')
+                        View::make('hr')
                             ->view('forms.components.hr'),
 
                         Group::make([
@@ -101,7 +129,7 @@ class Settings extends Page
                                 ->columnSpan(1),
 
                             Group::make([
-                                Toggle::make('notification_email')
+                                Toggle::make('settings.notification.email')
                                     ->hiddenLabel(),
                             ])->extraAttributes(['class' => 'float-right']),
 
@@ -112,7 +140,7 @@ class Settings extends Page
                                 ->columnSpan(1),
 
                             Group::make([
-                                Toggle::make('notification_whatsapp')
+                                Toggle::make('settings.notification.whatsapp')
                                     ->hiddenLabel(),
                             ])->extraAttributes(['class' => 'float-right']),
 
@@ -123,8 +151,26 @@ class Settings extends Page
             ->statePath('data');
     }
 
-    public function create(): void
+    public function submit(): void
     {
-        dd($this->form->getState());
+        $data = $this->form->getState();
+
+        try {
+
+            $this->user->update($data);
+
+            Notification::make()
+                ->title('Dados alterados com sucesso!')
+                ->body('Dados alterados com sucesso!')
+                ->success()
+                ->send();
+        } catch (Exception $e) {
+
+            Notification::make()
+                ->title('Erro ao alterar dados!')
+                ->body('Erro ao alterar dados!')
+                ->danger()
+                ->send();
+        }
     }
 }
